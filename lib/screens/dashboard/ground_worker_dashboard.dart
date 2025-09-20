@@ -4,7 +4,15 @@ import 'groundworker/new_report.dart';
 import 'groundworker/profile.dart';
 
 class GroundWorkerDashboard extends StatefulWidget {
-  const GroundWorkerDashboard({super.key});
+  final dynamic userId;
+  
+  final dynamic authToken;
+
+  const GroundWorkerDashboard({
+    super.key,
+    required this.userId,
+    required this.authToken,
+  });
 
   @override
   State<GroundWorkerDashboard> createState() => _GroundWorkerDashboardState();
@@ -106,7 +114,10 @@ class _GroundWorkerDashboardState extends State<GroundWorkerDashboard> {
       case 1:
         return NewReport(dummyIoTData: _dummyIoTData);
       case 2:
-        return ProfileScreen(profileData: _profileData);
+        return ProfileScreen(
+        userId: widget.userId,
+        authToken: widget.authToken,
+      );
       default:
         return HomePage(previousSubmissions: _previousSubmissions);
     }

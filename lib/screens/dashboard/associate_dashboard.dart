@@ -51,6 +51,7 @@ class _AssociateDashboardState extends State<AssociateDashboard> {
       ),
     );
   }
+
 }
 
 // Taluka Head Registration Page
@@ -426,7 +427,7 @@ class PostsPage extends StatelessWidget {
   }
 }
 
-// Profile Page (same as before)
+// Profile Page with logout button
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
@@ -452,6 +453,36 @@ class _ProfilePageState extends State<ProfilePage> {
     _nameController.text = 'Associate Name';
     _emailController.text = 'associate@example.com';
     _phoneController.text = '1234567890';
+  }
+
+  Future<void> _logout() async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // Navigate to login screen and remove all previous routes
+              Navigator.of(context).pushNamedAndRemoveUntil(
+                '/login',
+                (route) => false,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -535,6 +566,21 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: const Text('Cancel'),
                 ),
             ],
+          ),
+          const SizedBox(height: 20),
+          // Logout Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+            ),
           ),
         ],
       ),

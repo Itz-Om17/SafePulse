@@ -693,4 +693,38 @@ router.get('/stats/count-by-village', async (req, res) => {
   }
 });
 
+// Get ground worker by userId
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const [groundWorkers] = await db.execute(
+      `SELECT gw.*, u.name, u.email, u.phone, u.registered_by, u.registered_at 
+       FROM ground_workers gw 
+       INNER JOIN users u ON gw.user_id = u.id 
+       WHERE gw.user_id = ? AND u.role = 'Ground Worker' AND u.is_active = 1`,
+      [userId]
+    );
+
+    if (groundWorkers.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ground Worker not found'
+      });
+    }
+    console.log(groundWorkers);
+    res.json({
+      success: true,
+      data: groundWorkers[0]
+    });
+  } catch (error) {
+    console.error('Get ground worker by userId error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+
 module.exports = router;

@@ -115,7 +115,9 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             nextScreen = const AssociateDashboard();
             break;
           case "Ground Worker":
-            nextScreen = const GroundWorkerDashboard();
+            nextScreen = GroundWorkerDashboard(userId: userData['id'].toString(),
+  authToken: userData['token'],
+);
             break;
           case "Hospital":
             nextScreen = const HospitalDashboard();
@@ -130,12 +132,47 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             );
         }
 
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => nextScreen),
-          );
-        }
+if (mounted) {
+  switch (userData['role']) {
+    case "District Collector":
+      Navigator.pushReplacementNamed(context, '/district-collector-dashboard');
+      break;
+    case "Associate":
+      Navigator.pushReplacementNamed(context, '/associate-dashboard');
+      break;
+    case "Ground Worker":
+      Navigator.pushReplacementNamed(
+        context, 
+        '/ground-worker-dashboard',
+        arguments: {
+          'userId': userData['id'].toString(),
+          'authToken': userData['token'],
+        },
+      );
+      break;
+    case "Hospital":
+      Navigator.pushReplacementNamed(context, '/hospital-dashboard');
+      break;
+    case "Taluka Head":
+      Navigator.pushReplacementNamed(
+        context,
+        '/taluka-head-dashboard',
+        arguments: {
+          'userEmail': userData['email'],
+        },
+      );
+      break;
+    default:
+      // Show error screen using MaterialPageRoute since we don't have a named route for this
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text("Error")),
+          body: const Center(child: Text("No role assigned or invalid role")),
+        )),
+      );
+  }
+}
       } else {
         // Login failed
         final errorData = jsonDecode(response.body);

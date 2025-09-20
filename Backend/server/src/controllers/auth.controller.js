@@ -1,6 +1,6 @@
 const User = require('../models/user.model');
 const bcrypt = require('bcryptjs');
-
+const jwt = require('jsonwebtoken');
 const authController = {
   // Register a new user
   async register(req, res) {
@@ -131,6 +131,11 @@ const authController = {
           message: 'Invalid credentials'
         });
       }
+      const token = jwt.sign(
+  { id: user.id, email: user.email, role: user.role }, 
+  process.env.JWT_SECRET,
+  { expiresIn: '1d' } // optional expiry
+);
 
       // In production, generate JWT token here
       res.json({
@@ -140,7 +145,8 @@ const authController = {
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          token
         }
       });
     } catch (error) {
