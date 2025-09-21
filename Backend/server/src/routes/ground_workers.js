@@ -726,5 +726,30 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
+// Get ground workers by assigned area
+router.get('/assigned-area/:assignedArea', async (req, res) => {
+  try {
+    const { assignedArea } = req.params;
+
+    const [groundWorkers] = await db.execute(
+      `SELECT gw.*, u.name, u.email, u.phone, u.registered_by, u.registered_at 
+       FROM ground_workers gw 
+       INNER JOIN users u ON gw.user_id = u.id 
+       WHERE gw.assigned_area LIKE ? AND u.role = 'Ground Worker' AND u.is_active = 1`,
+      [`%${assignedArea}%`]
+    );
+
+    res.json({
+      success: true,
+      data: groundWorkers
+    });
+  } catch (error) {
+    console.error('Get ground workers by assigned area error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
 
 module.exports = router;
