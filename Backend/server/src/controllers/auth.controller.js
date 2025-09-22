@@ -136,6 +136,12 @@ const authController = {
   process.env.JWT_SECRET,
   { expiresIn: '1d' } // optional expiry
 );
+      console.log('👉 ABOUT TO SEND', {
+  id: user.id,
+  name: user.name,   // <-- is this undefined ?
+  email: user.email,
+  role: user.role,
+});
 
       // In production, generate JWT token here
       res.json({

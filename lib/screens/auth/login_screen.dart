@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../dashboard/district_collector_dashboard.dart';
@@ -104,7 +105,10 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         // Login successful
         final responseData = jsonDecode(response.body);
         final userData = responseData['data'];
-        
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('userName', userData['name']);
+        await prefs.setString('userId',   userData['id'].toString());
+        await prefs.setString('userRole', userData['role']);
         // Navigate to appropriate dashboard based on role
         Widget nextScreen;
         switch (userData['role']) {

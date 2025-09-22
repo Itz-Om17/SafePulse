@@ -15,9 +15,54 @@ router.post('/', async (req, res) => {
 });
 
 // Get tasks for a specific ground worker
-router.get('/worker/:workerId', async (req, res) => {
+// routes/tasks.js - Update the worker route
+// router.get('/worker/:workerId', async (req, res) => {
+//   try {
+//     const workerId = req.params.workerId;
+    
+//     // Convert to number if possible, otherwise use as string
+//     const tasks = await Task.find({ 
+//       $or: [
+//         { assignedTo: workerId }, // Try as string
+//         { assignedTo: Number(workerId) } // Try as number
+//       ]
+//     });
+    
+//     res.json(tasks);
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// });
+
+// // routes/tasks.js - Search by both ID and name
+// router.get('/worker/:identifier', async (req, res) => {
+//   try {
+//     const identifier = req.params.identifier;
+    
+//     // Try to convert to number for ID search, if it fails, search by name
+//     const workerId = Number(identifier);
+    
+//     const tasks = await Task.find({
+//       $or: [
+//         { assignedTo: workerId },           // Search by ID (number)
+//         { assignedTo: identifier },         // Search by ID (string)  
+//         { assignedToName: identifier }      // Search by name
+//       ]
+//     });
+    
+//     res.json(tasks);
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// });
+
+// routes/tasks.js - Update the route to search by name
+router.get('/worker/:workerName', async (req, res) => {
   try {
-    const tasks = await Task.find({ assignedTo: req.params.workerId });
+    const workerName = req.params.workerName;
+    const tasks = await Task.find({ assignedToName: workerName });
+    console.log(workerName);
+    console.log(tasks);
     res.json(tasks);
   } catch (error) {
     res.status(500).json({ message: error.message });

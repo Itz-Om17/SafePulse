@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Ground Worker Registration Page with Tasks Management
 class GroundWorkerRegistrationPage extends StatefulWidget {
@@ -18,6 +19,8 @@ class GroundWorkerRegistrationPage extends StatefulWidget {
 }
 
 class _GroundWorkerRegistrationPageState extends State<GroundWorkerRegistrationPage> {
+  String? _currentUserName;
+  String? _taskFilter; // null = all, or 'Pending'|'In Progress'|'Completed'|'High'
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -47,10 +50,17 @@ class _GroundWorkerRegistrationPageState extends State<GroundWorkerRegistrationP
   @override
   void initState() {
     super.initState();
+    _loadCurrentUser();
     _updateTalukaField();
     _fetchGroundWorkers();
     _fetchAllTasks();
   }
+  Future<void> _loadCurrentUser() async {
+  final prefs = await SharedPreferences.getInstance();
+  setState(() {
+    _currentUserName = prefs.getString('userName') ?? 'Taluka Head';
+  });
+}
 
   @override
   void didUpdateWidget(covariant GroundWorkerRegistrationPage oldWidget) {
@@ -144,210 +154,201 @@ class _GroundWorkerRegistrationPageState extends State<GroundWorkerRegistrationP
     }
   }
 
-  Widget _buildTasksOverview() {
-    if (_isLoadingTasks) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_allTasks.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Center(
-            child: Column(
-              children: [
-                Icon(Icons.task_alt, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(
-                  'No tasks assigned yet',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'Start by assigning tasks to your ground workers',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Task Statistics
-    final pendingTasks = _allTasks.where((task) => task['status'] == 'Pending').length;
-    final inProgressTasks = _allTasks.where((task) => task['status'] == 'In Progress').length;
-    final completedTasks = _allTasks.where((task) => task['status'] == 'Completed').length;
-    final highPriorityTasks = _allTasks.where((task) => task['priority'] == 'High').length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Task Statistics Cards
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard('Total Tasks', _allTasks.length.toString(), Colors.blue),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildStatCard('Pending', pendingTasks.toString(), Colors.orange),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard('In Progress', inProgressTasks.toString(), Colors.purple),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildStatCard('Completed', completedTasks.toString(), Colors.green),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard('High Priority', highPriorityTasks.toString(), Colors.red),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(child: SizedBox()), // Empty space for alignment
-          ],
-        ),
-        
-        const SizedBox(height: 20),
-        
-        // Recent Tasks List
-        const Text(
-          'All Tasks',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        
-        ..._allTasks.map((task) => Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: ExpansionTile(
-            leading: CircleAvatar(
-              backgroundColor: _getStatusColor(task['status']),
-              child: Icon(
-                _getStatusIcon(task['status']),
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            title: Text(
-              task['title'] ?? 'No Title',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Assigned to: ${task['assignedToName'] ?? 'Unknown'}'),
-                Text('Due: ${_formatDate(task['dueDate'])}'),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _getPriorityColor(task['priority']),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        task['priority'] ?? 'Medium',
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(task['status']),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        task['status'] ?? 'Pending',
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+Widget _buildTasksOverview() {
+  if (_isLoadingTasks) return const Center(child: CircularProgressIndicator());
+  if (_allTasks.isEmpty) {
+    return const Card(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(
+          child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Description:',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(task['description'] ?? 'No description'),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Assigned by: ${task['assignedBy'] ?? 'Unknown'}',
-                      style: const TextStyle(fontStyle: FontStyle.italic),
-                    ),
-                    Text(
-                      'Created: ${_formatDate(task['createdAt'])}',
-                      style: const TextStyle(fontStyle: FontStyle.italic),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () => _editTask(task),
-                          icon: const Icon(Icons.edit, size: 16),
-                          label: const Text('Edit'),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton.icon(
-                          onPressed: () => _confirmDeleteTask(task),
-                          icon: const Icon(Icons.delete, size: 16),
-                          label: const Text('Delete'),
-                          style: TextButton.styleFrom(foregroundColor: Colors.red),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              Icon(Icons.task_alt, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text('No tasks assigned yet',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('Start by assigning tasks to your ground workers',
+                  style: TextStyle(color: Colors.grey)),
             ],
           ),
-        )).toList(),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(String title, String value, Color color) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
         ),
       ),
     );
   }
 
+  final pendingTasks =
+      _allTasks.where((t) => t['status'] == 'Pending').length;
+  final inProgressTasks =
+      _allTasks.where((t) => t['status'] == 'In Progress').length;
+  final completedTasks =
+      _allTasks.where((t) => t['status'] == 'Completed').length;
+  final highPriorityTasks =
+      _allTasks.where((t) => t['priority'] == 'High').length;
+
+  final filtered = _allTasks.where((t) {
+    if (_taskFilter == null) return true;
+    return _taskFilter == 'High'
+        ? t['priority'] == 'High'
+        : t['status'] == _taskFilter;
+  }).toList();
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(children: [
+        Expanded(
+            child: _buildStatCard(
+                'Total Tasks', _allTasks.length.toString(), Colors.blue, null)),
+        const SizedBox(width: 10),
+        Expanded(
+            child: _buildStatCard(
+                'Pending', pendingTasks.toString(), Colors.orange, 'Pending')),
+      ]),
+      const SizedBox(height: 10),
+      Row(children: [
+        Expanded(
+            child: _buildStatCard('In Progress', inProgressTasks.toString(),
+                Colors.purple, 'In Progress')),
+        const SizedBox(width: 10),
+        Expanded(
+            child: _buildStatCard('Completed', completedTasks.toString(),
+                Colors.green, 'Completed')),
+      ]),
+      const SizedBox(height: 10),
+      Row(children: [
+        Expanded(
+            child: _buildStatCard('High Priority', highPriorityTasks.toString(),
+                Colors.red, 'High')),
+        const Expanded(child: SizedBox()),
+      ]),
+      const SizedBox(height: 20),
+      if (_taskFilter != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: InputChip(
+            label: Text('Showing: $_taskFilter  ✕'),
+            onPressed: () => setState(() => _taskFilter = null),
+            backgroundColor: Colors.blue.shade50,
+          ),
+        ),
+      const Text('Tasks',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 10),
+      ...filtered
+          .map((task) => Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: ExpansionTile(
+                  leading: CircleAvatar(
+                    backgroundColor: _getStatusColor(task['status']),
+                    child: Icon(_getStatusIcon(task['status']),
+                        color: Colors.white, size: 20),
+                  ),
+                  title: Text(task['title'] ?? 'No Title',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Assigned to: ${task['assignedToName'] ?? 'Unknown'}'),
+                      Text('Due: ${_formatDate(task['dueDate'])}'),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _getPriorityColor(task['priority']),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(task['priority'] ?? 'Medium',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 12)),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _getStatusColor(task['status']),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(task['status'] ?? 'Pending',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Description:',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text(task['description'] ?? 'No description'),
+                          const SizedBox(height: 10),
+                          Text(
+                              'Assigned by: ${task['assignedBy'] ?? 'Unknown'}',
+                              style: const TextStyle(fontStyle: FontStyle.italic)),
+                          Text('Created: ${_formatDate(task['createdAt'])}',
+                              style: const TextStyle(fontStyle: FontStyle.italic)),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () => _editTask(task),
+                                icon: const Icon(Icons.edit, size: 16),
+                                label: const Text('Edit'),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton.icon(
+                                onPressed: () => _confirmDeleteTask(task),
+                                icon: const Icon(Icons.delete, size: 16),
+                                label: const Text('Delete'),
+                                style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ))
+          .toList(),
+    ],
+  );
+}
+Widget _buildStatCard(String title, String value, Color color, String? filterKey) {
+  return GestureDetector(
+    onTap: () => setState(() => _taskFilter = filterKey),
+    child: Card(
+      elevation: 2,
+      margin: const EdgeInsets.all(4),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(value,
+                style: TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+            const SizedBox(height: 4),
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    ),
+  );
+}
   Color _getStatusColor(String? status) {
     switch (status) {
       case 'Pending':
@@ -1172,7 +1173,7 @@ class _GroundWorkerRegistrationPageState extends State<GroundWorkerRegistrationP
           "description": _taskDescriptionController.text.trim(),
           "assignedTo": worker['_id'] ?? worker['id'],
           "assignedToName": worker['name'] ?? 'Unknown Worker',
-          "assignedBy": assignedByName, // Use the dynamically fetched name
+          "assignedBy": _currentUserName!, // Use the dynamically fetched name
           "dueDate": _taskDueDateController.text.trim(),
           "priority": _taskPriorityController.text.trim(),
           "taluka": _talukaController.text.trim(),
