@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DistrictCollectorDashboard extends StatefulWidget {
   const DistrictCollectorDashboard({super.key});
@@ -74,10 +75,158 @@ class _HomePageState extends State<HomePage> {
   final _additionalInfoController = TextEditingController();
   bool _isLoading = false;
   String? _selectedFile;
+  late String? _selectedTaluka; // add at the top with other controllers
+  late String? _selectedVillage; // with the other “late” vars
+  List<String> _talukas = [];      // cached talukas
+  bool _loadingTalukas = false;    // show spinner while downloading
+  List<String> _villages = [];      // villages for selected taluka
+  bool _loadingVillages = false;
+  late String? _assignedVillage;   // village chosen for “assigned area”
+  List<String> _assignedVillages = []; // villages for assigned-area dropdown
+  bool _loadingAssignedVillages = false;
+Future<List<String>> _talukasForDistrict() async {
+  final prefs = await SharedPreferences.getInstance();
+  final district = prefs.getString('userDistrict') ?? '';
 
+  final url = Uri.parse(
+      'https://raw.githubusercontent.com/pranshumaheshwari/indian-cities-and-villages/master/data.json');
+  final resp = await http.get(url);
+  if (resp.statusCode != 200) return [];
+
+  final List<dynamic> data = jsonDecode(resp.body);
+  final Set<String> talukas = {};
+
+  for (final state in data) {
+    for (final dist in state['districts'] ?? []) {
+      if (dist['district'] == district) {
+        for (final sub in dist['subDistricts'] ?? []) {
+          talukas.add(sub['subDistrict']);
+        }
+      }
+    }
+  }
+  return talukas.toList()..sort();
+}
+Future<void> _fetchAssignedVillages() async {
+  if (_selectedTaluka == null) return;
+
+  setState(() => _loadingAssignedVillages = true);
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final district = prefs.getString('userDistrict') ?? '';
+
+    final url = Uri.parse(
+        'https://raw.githubusercontent.com/pranshumaheshwari/indian-cities-and-villages/master/data.json');
+    final resp = await http.get(url);
+    if (resp.statusCode != 200) return;
+
+    final List<dynamic> data = jsonDecode(resp.body);
+    final Set<String> villages = {};
+
+    for (final state in data) {
+      for (final dist in state['districts'] ?? []) {
+        if (dist['district'] == district) {
+          for (final sub in dist['subDistricts'] ?? []) {
+            if (sub['subDistrict'] == _selectedTaluka) {
+              for (final v in sub['villages'] ?? []) {
+                villages.add(v);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    setState(() => _assignedVillages = villages.toList()..sort());
+  } finally {
+    setState(() => _loadingAssignedVillages = false);
+  }
+}
+Future<void> _fetchVillages() async {
+  if (_selectedTaluka == null) return; // nothing to do
+
+  setState(() => _loadingVillages = true);
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final district = prefs.getString('userDistrict') ?? '';
+
+    final url = Uri.parse(
+        'https://raw.githubusercontent.com/pranshumaheshwari/indian-cities-and-villages/master/data.json');
+    final resp = await http.get(url);
+    if (resp.statusCode != 200) return;
+
+    final List<dynamic> data = jsonDecode(resp.body);
+    final Set<String> villages = {};
+
+    for (final state in data) {
+      for (final dist in state['districts'] ?? []) {
+        if (dist['district'] == district) {
+          for (final sub in dist['subDistricts'] ?? []) {
+            if (sub['subDistrict'] == _selectedTaluka) {
+              for (final v in sub['villages'] ?? []) {
+                villages.add(v);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    setState(() => _villages = villages.toList()..sort());
+  } finally {
+    setState(() => _loadingVillages = false);
+  }
+}
+Future<void> _fetchTalukas() async {
+  if (_talukas.isNotEmpty) return; // already cached
+
+  setState(() => _loadingTalukas = true);
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final district = prefs.getString('userDistrict') ?? '';
+
+    final url = Uri.parse(
+        'https://raw.githubusercontent.com/pranshumaheshwari/indian-cities-and-villages/master/data.json');
+    final resp = await http.get(url);
+    if (resp.statusCode != 200) return;
+
+    final List<dynamic> data = jsonDecode(resp.body);
+    final Set<String> talukas = {};
+
+    for (final state in data) {
+      for (final dist in state['districts'] ?? []) {
+        if (dist['district'] == district) {
+          for (final sub in dist['subDistricts'] ?? []) {
+            talukas.add(sub['subDistrict']);
+          }
+        }
+      }
+    }
+
+    setState(() => _talukas = talukas.toList()..sort());
+  } finally {
+    setState(() => _loadingTalukas = false);
+  }
+}
   // Configuration for backend URL
   static const String baseUrl = 'http://10.0.2.2:3000';
-
+  @override
+void initState() {
+  super.initState();
+  _selectedTaluka = null;
+  _loadDistrict(); // ← pre-fill district
+  _selectedVillage = null;
+   _assignedVillage = null;
+  _fetchTalukas();
+}
+  Future<void> _loadDistrict() async {
+  final prefs = await SharedPreferences.getInstance();
+  final district = prefs.getString('userDistrict') ?? '';
+  _districtController.text = district;   // pre-fill
+}
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -235,30 +384,57 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _districtController,
-                  decoration: const InputDecoration(
-                    labelText: 'District',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+               const SizedBox(height: 15),
+TextFormField(
+  controller: _districtController,
+  decoration: const InputDecoration(
+    labelText: 'District',
+    border: OutlineInputBorder(),
+  ),
+  readOnly: true, // non-editable
+),
+const SizedBox(height: 15),
+_loadingTalukas
+    ? const LinearProgressIndicator() // tiny progress bar
+    : DropdownButtonFormField<String>(
+        value: _selectedTaluka,
+        decoration: const InputDecoration(
+          labelText: 'Taluka *',
+          border: OutlineInputBorder(),
+        ),
+        items: _talukas
+            .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+            .toList(),
+        onChanged: (val) {
+  setState(() {
+    _selectedTaluka = val;
+    _selectedVillage = null; // reset village
+    _villages.clear();
+    _assignedVillage = null;
+    _assignedVillages.clear();
+  });
+  _fetchVillages(); // ← new
+  _fetchAssignedVillages();
+},
+        validator: (val) =>
+            val == null ? 'Please choose a taluka' : null,
+      ),
                 const SizedBox(height: 15),
-                TextFormField(
-                  controller: _talukaController,
-                  decoration: const InputDecoration(
-                    labelText: 'Taluka',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 15),
-                TextFormField(
-                  controller: _villageController,
-                  decoration: const InputDecoration(
-                    labelText: 'Village',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+_loadingVillages
+    ? const LinearProgressIndicator()
+    : DropdownButtonFormField<String>(
+        value: _selectedVillage,
+        decoration: const InputDecoration(
+          labelText: 'Village *',
+          border: OutlineInputBorder(),
+        ),
+        items: _villages
+            .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+            .toList(),
+        onChanged: (val) => setState(() => _selectedVillage = val),
+        validator: (val) =>
+            val == null ? 'Please choose a village' : null,
+      ),
                 
                 // Additional Information
                 const SizedBox(height: 20),
@@ -269,15 +445,22 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _assignedAreaController,
-                  decoration: const InputDecoration(
-                    labelText: 'Assigned Area',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 2,
-                ),
+                const SizedBox(height: 15),
+_loadingAssignedVillages
+    ? const LinearProgressIndicator()
+    : DropdownButtonFormField<String>(
+        value: _assignedVillage,
+        decoration: const InputDecoration(
+          labelText: 'Assigned Village *',
+          border: OutlineInputBorder(),
+        ),
+        items: _assignedVillages
+            .map((v) => DropdownMenuItem(value: v, child: Text(v)))
+            .toList(),
+        onChanged: (val) => setState(() => _assignedVillage = val),
+        validator: (val) =>
+            val == null ? 'Please choose an assigned village' : null,
+      ),
                 const SizedBox(height: 15),
                 TextFormField(
                   controller: _additionalInfoController,
@@ -351,9 +534,9 @@ class _HomePageState extends State<HomePage> {
             "password": _passwordController.text.trim(),
             "registeredBy": "District Collector", // You might want to use the actual user ID
             "district": _districtController.text.trim(),
-            "taluka": _talukaController.text.trim(),
-            "village": _villageController.text.trim(),
-            "assignedArea": _assignedAreaController.text.trim(),
+            "taluka": _selectedTaluka,
+            "village": _selectedVillage ?? '',
+            "assignedArea": _assignedVillage ?? '',
             "additionalInfo": _additionalInfoController.text.trim(),
           }),
         );
@@ -363,15 +546,20 @@ class _HomePageState extends State<HomePage> {
             const SnackBar(content: Text('Associate registered successfully!')),
           );
           // Clear form
-          _nameController.clear();
+           _nameController.clear();
           _emailController.clear();
           _phoneController.clear();
           _passwordController.clear();
-          _districtController.clear();
-          _talukaController.clear();
-          _villageController.clear();
           _assignedAreaController.clear();
           _additionalInfoController.clear();
+          // clear dropdown selections
+          setState(() {
+            _selectedTaluka = null;
+            _selectedVillage = null;
+            _assignedVillage = null;
+            _villages.clear();
+            _assignedVillages.clear();
+            });
         } else {
           final errorData = jsonDecode(response.body);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -399,7 +587,6 @@ class _HomePageState extends State<HomePage> {
     _districtController.dispose();
     _talukaController.dispose();
     _villageController.dispose();
-    _assignedAreaController.dispose();
     _additionalInfoController.dispose();
     super.dispose();
   }
@@ -433,14 +620,20 @@ class _ProfilePageState extends State<ProfilePage> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   bool _isEditing = false;
-
+  late final TextEditingController _districtController;
   @override
   void initState() {
+    _districtController = TextEditingController(); // ← must create it
     super.initState();
     // Load user data (you would fetch this from your backend)
-    _loadUserData();
+    _loadDistrict();
   }
-
+  Future<void> _loadDistrict() async {
+  final prefs = await SharedPreferences.getInstance();
+  final district = prefs.getString('userDistrict') ?? '';
+  final state    = prefs.getString('userState')    ?? '';   // add this line
+  _districtController.text = district;   // pre-fill
+}
   void _loadUserData() {
     // Mock data - replace with actual API call
     _nameController.text = 'District Collector Name';
@@ -520,6 +713,15 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             enabled: _isEditing,
           ),
+          const SizedBox(height: 15),
+TextFormField(
+  controller: _districtController,
+  decoration: const InputDecoration(
+    labelText: 'District',
+    border: OutlineInputBorder(),
+  ),
+  readOnly: true, // non-editable
+),
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -591,6 +793,7 @@ class _ProfilePageState extends State<ProfilePage> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _districtController.dispose(); // ← add this
     super.dispose();
   }
 }

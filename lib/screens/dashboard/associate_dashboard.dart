@@ -77,7 +77,7 @@ class _TalukaHeadRegistrationPageState extends State<TalukaHeadRegistrationPage>
   String? _selectedFile;
 
   // Configuration for backend URL
-  static const String baseUrl = 'http://10.0.2.2:3000';
+  static const String baseUrl = 'http://10.0.2.2:3000 ';
 
   @override
   Widget build(BuildContext context) {

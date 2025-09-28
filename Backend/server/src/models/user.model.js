@@ -13,13 +13,15 @@ class User {
       secretKey,
       registeredBy,
       registeredAt,
-      isActive
+      isActive,
+      district,
+      state,
     } = userData;
 
     const sql = `
       INSERT INTO users 
-      (name, phone, email, password, role, hospital_name, secret_key, registered_by, registered_at, is_active) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (name, phone, email, password, role, hospital_name, secret_key, registered_by, registered_at, is_active, district,state) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.execute(sql, [
@@ -32,7 +34,9 @@ class User {
       secretKey || null,
       registeredBy || 'self',
       registeredAt || new Date(),
-      isActive || true
+      isActive || true,
+      district || null,
+      state || null, 
     ]);
 
     return result.insertId;

@@ -15,7 +15,7 @@ const authController = {
         secretKey,
         registeredBy,
         registeredAt,
-        isActive
+        isActive, district, state
       } = req.body;
 
       // Validate required fields
@@ -77,7 +77,9 @@ const authController = {
         secretKey: secretKey || null,
         registeredBy: registeredBy || 'self',
         registeredAt: registeredAt || new Date(),
-        isActive: isActive === 'true' || isActive === true || true
+        isActive: isActive === 'true' || isActive === true || true,
+        district: district || null,
+        state: state || null,
       });
 
       res.status(201).json({
@@ -91,12 +93,30 @@ const authController = {
         }
       });
     } catch (error) {
-      console.error('Registration error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
-    }
+  console.error('Registration error:', error);
+
+  // Handle duplicate District Collector per district
+  if (error.code === 'ER_DUP_ENTRY' && error.sqlMessage.includes('unique_dc_per_district')) {
+    return res.status(409).json({
+      success: false,
+      message: `A District Collector for  ${req.body.district} district has already been registered.`
+    });
+  }
+
+  // Handle duplicate email (if you have a unique constraint on email)
+  if (error.code === 'ER_DUP_ENTRY' && error.sqlMessage.includes('email')) {
+    return res.status(409).json({
+      success: false,
+      message: 'User with this email already exists.'
+    });
+  }
+
+  // Generic server error
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error'
+  });
+}
   },
 
   // Login user
@@ -131,30 +151,40 @@ const authController = {
           message: 'Invalid credentials'
         });
       }
-      const token = jwt.sign(
-  { id: user.id, email: user.email, role: user.role }, 
+const token = jwt.sign(
+  {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    state: user.state,      // <-- new
+    district: user.district // <-- new
+  },
   process.env.JWT_SECRET,
-  { expiresIn: '1d' } // optional expiry
+  { expiresIn: '1d' }
 );
       console.log('👉 ABOUT TO SEND', {
   id: user.id,
   name: user.name,   // <-- is this undefined ?
   email: user.email,
   role: user.role,
+  state: user.state,      // <-- new
+  district: user.district, // <-- new
 });
 
       // In production, generate JWT token here
-      res.json({
-        success: true,
-        message: 'Login successful',
-        data: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          token
-        }
-      });
+res.json({
+  success: true,
+  message: 'Login successful',
+  data: {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    state: user.state,      // <-- new
+    district: user.district, // <-- new
+    token
+  }
+});
     } catch (error) {
       console.error('Login error:', error);
       res.status(500).json({

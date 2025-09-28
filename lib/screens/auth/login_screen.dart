@@ -109,6 +109,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         await prefs.setString('userName', userData['name']);
         await prefs.setString('userId',   userData['id'].toString());
         await prefs.setString('userRole', userData['role']);
+        await prefs.setString('userState',    userData['state'] ?? '');   // null-safe
+        await prefs.setString('userDistrict', userData['district'] ?? '');
         // Navigate to appropriate dashboard based on role
         Widget nextScreen;
         switch (userData['role']) {

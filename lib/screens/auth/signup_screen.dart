@@ -23,6 +23,15 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
   bool _obscurePassword = true;
   bool _obscureSecretKey = true;
 
+  // State and District related variables
+  List<String> _states = [];
+  List<String> _districts = [];
+  String? _selectedState;
+  String? _selectedDistrict;
+  bool _isLoadingStates = false;
+  bool _isLoadingDistricts = false;
+  List<dynamic> _locationData = [];
+
   late AnimationController _fadeController;
   late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
@@ -45,6 +54,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
   void initState() {
     super.initState();
     _initializeAnimations();
+    _loadStatesData();
   }
 
   void _initializeAnimations() {
@@ -71,6 +81,82 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
     _slideController.forward();
   }
 
+  // Load states data from the API
+  Future<void> _loadStatesData() async {
+    setState(() {
+      _isLoadingStates = true;
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://raw.githubusercontent.com/pranshumaheshwari/indian-cities-and-villages/master/data.json'),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        _locationData = data;
+        
+        final Set<String> statesSet = {};
+        for (var stateData in data) {
+          if (stateData['state'] != null) {
+            statesSet.add(stateData['state']);
+          }
+        }
+        
+        setState(() {
+          _states = statesSet.toList()..sort();
+          _isLoadingStates = false;
+        });
+      } else {
+        throw Exception('Failed to load states data');
+      }
+    } catch (error) {
+      setState(() {
+        _isLoadingStates = false;
+      });
+      _showErrorSnackBar("Failed to load states data. Please check your internet connection.");
+    }
+  }
+
+  // Load districts based on selected state
+  Future<void> _loadDistrictsForState(String stateName) async {
+    setState(() {
+      _isLoadingDistricts = true;
+      _districts.clear();
+      _selectedDistrict = null;
+    });
+
+    try {
+      final stateData = _locationData.firstWhere(
+        (state) => state['state'] == stateName,
+        orElse: () => null,
+      );
+
+      if (stateData != null && stateData['districts'] != null) {
+        final Set<String> districtsSet = {};
+        for (var district in stateData['districts']) {
+          if (district['district'] != null) {
+            districtsSet.add(district['district']);
+          }
+        }
+        
+        setState(() {
+          _districts = districtsSet.toList()..sort();
+          _isLoadingDistricts = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingDistricts = false;
+        });
+      }
+    } catch (error) {
+      setState(() {
+        _isLoadingDistricts = false;
+      });
+      _showErrorSnackBar("Failed to load districts data.");
+    }
+  }
+
   // Function to register user
   Future<void> _registerUser() async {
     setState(() {
@@ -86,6 +172,8 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
       "role": _selectedRole,
       "hospitalName": _hospitalNameController.text.trim(),
       "secretKey": _secretKeyController.text.trim(),
+      "state": _selectedState,
+      "district": _selectedDistrict,
       "registeredBy": "self",
       "registeredAt": DateTime.now().toIso8601String(),
       "isActive": "true",
@@ -99,7 +187,11 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
         },
         body: jsonEncode(userData),
       );
-
+      if (response.statusCode == 409) {
+        final errorData = jsonDecode(response.body);
+        _showErrorSnackBar(errorData['message'] ?? "District Collector already exists for this district");
+        return;
+      }
       if (response.statusCode == 201) {
         _showSuccessSnackBar("Account created successfully as $_selectedRole");
         Navigator.pop(context);
@@ -405,7 +497,15 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
         children: _roles.map((role) {
           final isSelected = _selectedRole == role;
           return InkWell(
-            onTap: () => setState(() => _selectedRole = role),
+            onTap: () {
+              setState(() {
+                _selectedRole = role;
+                // Reset location data when role changes
+                _selectedState = null;
+                _selectedDistrict = null;
+                _districts.clear();
+              });
+            },
             borderRadius: BorderRadius.circular(12),
             child: Container(
               padding: const EdgeInsets.all(16),
@@ -432,7 +532,15 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                   Radio<String>(
                     value: role,
                     groupValue: _selectedRole,
-                    onChanged: (value) => setState(() => _selectedRole = value!),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedRole = value!;
+                        // Reset location data when role changes
+                        _selectedState = null;
+                        _selectedDistrict = null;
+                        _districts.clear();
+                      });
+                    },
                     activeColor: Theme.of(context).primaryColor,
                   ),
                 ],
@@ -472,6 +580,25 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 24),
+          Text(
+            "Location Information",
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).primaryColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // State Dropdown
+          _buildStateDropdown(),
+          
+          const SizedBox(height: 16),
+          
+          // District Dropdown
+          _buildDistrictDropdown(),
+          
+          const SizedBox(height: 24),
+          
           Text(
             "Authorization Required",
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -517,6 +644,109 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
       );
     }
     return const SizedBox.shrink();
+  }
+
+  Widget _buildStateDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedState,
+      decoration: InputDecoration(
+        labelText: "Select State",
+        hintText: _isLoadingStates ? "Loading states..." : "Choose your state",
+        prefixIcon: const Icon(Icons.location_on_outlined),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+      ),
+      items: _isLoadingStates
+          ? []
+          : _states.map((String state) {
+              return DropdownMenuItem<String>(
+                value: state,
+                child: Text(state),
+              );
+            }).toList(),
+      onChanged: _isLoadingStates
+          ? null
+          : (String? newValue) {
+              if (newValue != null) {
+                setState(() {
+                  _selectedState = newValue;
+                  _selectedDistrict = null;
+                  _districts.clear();
+                });
+                _loadDistrictsForState(newValue);
+              }
+            },
+      validator: _selectedRole == "District Collector"
+          ? (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please select a state';
+              }
+              return null;
+            }
+          : null,
+    );
+  }
+
+  Widget _buildDistrictDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedDistrict,
+      decoration: InputDecoration(
+        labelText: "Select District",
+        hintText: _isLoadingDistricts
+            ? "Loading districts..."
+            : _selectedState == null
+                ? "Select state first"
+                : "Choose your district",
+        prefixIcon: const Icon(Icons.location_city_outlined),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey.shade50,
+      ),
+      items: _isLoadingDistricts || _selectedState == null
+          ? []
+          : _districts.map((String district) {
+              return DropdownMenuItem<String>(
+                value: district,
+                child: Text(district),
+              );
+            }).toList(),
+      onChanged: _isLoadingDistricts || _selectedState == null
+          ? null
+          : (String? newValue) {
+              setState(() {
+                _selectedDistrict = newValue;
+              });
+            },
+      validator: _selectedRole == "District Collector"
+          ? (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please select a district';
+              }
+              return null;
+            }
+          : null,
+    );
   }
 
   Widget _buildTextFormField({
@@ -597,11 +827,20 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
       return;
     }
 
-    // Secret key check for District Collector
-    if (_selectedRole == "District Collector" &&
-        _secretKeyController.text.trim() != "DC-MASTER-KEY-2025") {
-      _showErrorSnackBar("Invalid District Collector Secret Key");
-      return;
+    // District Collector specific validations
+    if (_selectedRole == "District Collector") {
+      if (_selectedState == null) {
+        _showErrorSnackBar("Please select a state");
+        return;
+      }
+      if (_selectedDistrict == null) {
+        _showErrorSnackBar("Please select a district");
+        return;
+      }
+      if (_secretKeyController.text.trim() != "DC-MASTER-KEY-2025") {
+        _showErrorSnackBar("Invalid District Collector Secret Key");
+        return;
+      }
     }
 
     await _registerUser();
@@ -677,7 +916,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
               ],
             ),
             const SizedBox(height: 12),
-            _buildInfoItem("District Collector", "Self-register with secret key", Icons.account_balance),
+            _buildInfoItem("District Collector", "Self-register with secret key + location", Icons.account_balance),
             _buildInfoItem("Hospital", "Self-register with hospital details", Icons.local_hospital),
             _buildInfoItem("Villager", "Self-register freely", Icons.person),
             const SizedBox(height: 8),
